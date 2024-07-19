@@ -1,8 +1,9 @@
-import pandas as pd
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.preprocessing import LabelEncoder
 import logging
 from typing import List
+
+import pandas as pd
+from sklearn.preprocessing import LabelEncoder
+from sklearn.tree import DecisionTreeClassifier
 
 
 class SimplifiedAkinator:
@@ -39,14 +40,19 @@ class SimplifiedAkinator:
         self.clf = DecisionTreeClassifier(random_state=42)
         self.feature_names: List[str] = []
         self._prepare_model()
-        
-        self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(logging.DEBUG if debug else logging.INFO)
-        if not self.logger.handlers:
+        self.logger = self._setup_logger(debug)
+
+    def _setup_logger(self, debug: bool) -> logging.Logger:
+        logger = logging.getLogger(__name__)
+        logger.setLevel(logging.DEBUG if debug else logging.INFO)
+        if not logger.handlers:
             handler = logging.StreamHandler()
-            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            formatter = logging.Formatter(
+                "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+            )
             handler.setFormatter(formatter)
-            self.logger.addHandler(handler)
+            logger.addHandler(handler)
+        return logger
 
     def _prepare_model(self) -> None:
         """
@@ -55,8 +61,8 @@ class SimplifiedAkinator:
         This method separates features and target from the dataframe,
         encodes the target, fits the classifier, and stores feature names.
         """
-        X = self.df.drop(columns=['Personaje'])
-        y = self.df['Personaje']
+        X = self.df.drop(columns=["Personaje"])
+        y = self.df["Personaje"]
         y_encoded = self.le.fit_transform(y)
         self.clf.fit(X, y_encoded)
         self.feature_names = X.columns.tolist()
@@ -75,8 +81,14 @@ class SimplifiedAkinator:
         bool
             True if the user's response is affirmative, False otherwise.
         """
-        response = input(f"¿{feature_name}? (sí/no): ").strip().lower()
-        return response in ['sí', 'si', 's', 'yes', 'y']
+        while True:
+            response = input(f"¿{feature_name}? (sí/no): ").strip().lower()
+            if response in ["sí", "si", "s", "yes", "y"]:
+                return True
+            elif response in ["no", "n"]:
+                return False
+            else:
+                print("Por favor, responde con 'sí' o 'no'.")
 
     def play(self) -> None:
         """
@@ -88,35 +100,37 @@ class SimplifiedAkinator:
         """
         print("Piensa en un personaje y yo trataré de adivinarlo.")
         curr_node = 0
-        user_responses: List[bool] = []
+        user_responses = []
 
         while self.clf.tree_.feature[curr_node] != -2:  # Not a leaf
             feature_index = self.clf.tree_.feature[curr_node]
             feature_name = self.feature_names[feature_index]
-            
+
             response = self._ask_question(feature_name)
-            user_responses.append(response)
-            
+            user_responses.append((feature_name, response))
+
             if response:
                 curr_node = self.clf.tree_.children_right[curr_node]
             else:
                 curr_node = self.clf.tree_.children_left[curr_node]
-            
-            self.logger.debug(f"Node {curr_node}, Feature: {feature_name}, Response: {response}")
+
+            self.logger.debug(
+                f"Node {curr_node}, Feature: {feature_name}, Response: {response}"
+            )
 
         pred = self.clf.tree_.value[curr_node].argmax()
         character = self.le.inverse_transform([pred])[0]
-        
+
         print("\n" + "=" * 60)
         print(f"¡He adivinado! Creo que estás pensando en: {character}")
         print("=" * 60 + "\n")
 
         self.logger.debug("User responses:")
-        for feature, response in zip(self.feature_names, user_responses):
+        for feature, response in user_responses:
             self.logger.debug(f"{feature}: {'Sí' if response else 'No'}")
 
         self.logger.debug("Character data in dataset:")
-        self.logger.debug(self.df[self.df['Personaje'] == character])
+        self.logger.debug(self.df[self.df["Personaje"] == character])
 
     def print_tree(self) -> None:
         """
@@ -126,6 +140,7 @@ class SimplifiedAkinator:
         a text representation of the decision tree and logs it.
         """
         from sklearn.tree import export_text
+
         tree_rules = export_text(self.clf, feature_names=self.feature_names)
         self.logger.info("Decision Tree Rules:")
         self.logger.info(tree_rules)
