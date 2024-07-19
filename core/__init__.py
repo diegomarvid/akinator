@@ -1,0 +1,1 @@
+from .akinator import AkinatorCore

@@ -1,6 +1,13 @@
+import sys
+import os
+
+# Add the project root directory to the Python path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, project_root)
+
 import streamlit as st
 from typing import List, Tuple, Dict, Any
-from akinator_core import AkinatorCore
+from core import AkinatorCore
 
 CSV_FILE = "data/personajes.csv"  # Replace with the path to your CSV file
 

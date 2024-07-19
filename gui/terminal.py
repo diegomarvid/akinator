@@ -1,7 +1,8 @@
 # akinator_terminal_gui.py
 
 from typing import List, Tuple
-from akinator_core import AkinatorCore
+from core.akinator import AkinatorCore
+
 
 class AkinatorTerminalGUI:
     """
@@ -12,8 +13,10 @@ class AkinatorTerminalGUI:
 
     Parameters
     ----------
-    akinator : AkinatorCore
-        An instance of the AkinatorCore class to handle game logic.
+    csv_file : str
+        The path to the CSV file containing game data.
+    debug : bool, optional
+        Flag to enable debugging mode, by default False.
 
     Attributes
     ----------
@@ -23,8 +26,8 @@ class AkinatorTerminalGUI:
         List of user responses (feature name and boolean response).
     """
 
-    def __init__(self, akinator: AkinatorCore):
-        self.akinator = akinator
+    def __init__(self, csv_file: str, debug: bool = False):
+        self.akinator = AkinatorCore(csv_file, debug)
         self.user_responses: List[Tuple[str, bool]] = []
 
     def _ask_question(self, feature_name: str) -> bool:
@@ -59,7 +62,7 @@ class AkinatorTerminalGUI:
         It then displays the result and logs debug information.
         """
         print("Piensa en un personaje y yo trataré de adivinarlo.")
-        
+
         while True:
             question = self.akinator.get_next_question()
             if question is None:
@@ -90,22 +93,3 @@ class AkinatorTerminalGUI:
         """
         print("Árbol de decisión:")
         print(self.akinator.get_tree_info())
-
-def create_akinator_terminal_gui(csv_file: str, debug: bool = False) -> AkinatorTerminalGUI:
-    """
-    Create and return an instance of AkinatorTerminalGUI.
-
-    Parameters
-    ----------
-    csv_file : str
-        Path to the CSV file containing character data.
-    debug : bool, optional
-        If True, enables debug logging. Default is False.
-
-    Returns
-    -------
-    AkinatorTerminalGUI
-        An instance of the AkinatorTerminalGUI class.
-    """
-    akinator_core = AkinatorCore(csv_file, debug)
-    return AkinatorTerminalGUI(akinator_core)
