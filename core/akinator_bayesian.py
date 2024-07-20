@@ -18,7 +18,7 @@ class AkinatorBNCore:
         self.model = None
         self.inference = None
         self.characters = list(self.data["Personaje"])
-        self.features = list(self.data.columns[1:])
+        self.features = self._get_valid_features()
         self.evidence = {}
         self.current_feature = None
         self.logger = self._setup_logger(debug)
@@ -38,10 +38,16 @@ class AkinatorBNCore:
             logger.addHandler(handler)
         return logger
 
+    def _get_valid_features(self) -> List[str]:
+        return [col for col in self.data.columns[1:] if self.data[col].nunique() > 1]
+
     def _prepare_model(self) -> None:
+        valid_columns = ["Personaje"] + self.features
+        filtered_data = self.data[valid_columns]
+
         edges = [("Personaje", feature) for feature in self.features]
         self.model = BayesianNetwork(edges)
-        self.model.fit(self.data, estimator=MaximumLikelihoodEstimator)
+        self.model.fit(filtered_data, estimator=MaximumLikelihoodEstimator)
         self.inference = VariableElimination(self.model)
         self.logger.info("Bayesian Network model built successfully")
 
