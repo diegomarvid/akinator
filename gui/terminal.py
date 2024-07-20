@@ -1,66 +1,25 @@
-# akinator_terminal_gui.py
-
-from typing import List, Tuple
-from core.akinator import AkinatorCore
+from typing import List, Tuple, Optional
+from core.akinator_bayesian import AkinatorBNCore
 
 
 class AkinatorTerminalGUI:
-    """
-    Terminal-based GUI for the Akinator game.
-
-    This class manages the terminal interface for the Akinator game,
-    handling user interactions and display logic.
-
-    Parameters
-    ----------
-    csv_file : str
-        The path to the CSV file containing game data.
-    debug : bool, optional
-        Flag to enable debugging mode, by default False.
-
-    Attributes
-    ----------
-    akinator : AkinatorCore
-        The AkinatorCore instance used for game logic.
-    user_responses : List[Tuple[str, bool]]
-        List of user responses (feature name and boolean response).
-    """
-
     def __init__(self, csv_file: str, debug: bool = False):
-        self.akinator = AkinatorCore(csv_file, debug)
-        self.user_responses: List[Tuple[str, bool]] = []
+        self.akinator = AkinatorBNCore(csv_file, debug)
+        self.user_responses: List[Tuple[str, Optional[bool]]] = []
 
-    def _ask_question(self, feature_name: str) -> bool:
-        """
-        Ask a yes/no question to the user about a given feature.
-
-        Parameters
-        ----------
-        feature_name : str
-            The name of the feature to ask about.
-
-        Returns
-        -------
-        bool
-            True if the user's response is affirmative, False otherwise.
-        """
+    def _ask_question(self, feature_name: str) -> Optional[bool]:
         while True:
-            response = input(f"¿{feature_name}? (sí/no): ").strip().lower()
+            response = input(f"¿{feature_name}? (sí/no/no sé): ").strip().lower()
             if response in ["sí", "si", "s", "yes", "y"]:
                 return True
             elif response in ["no", "n"]:
                 return False
+            elif response in ["no sé", "no se", "ns", "idk"]:
+                return None
             else:
-                print("Por favor, responde con 'sí' o 'no'.")
+                print("Por favor, responde con 'sí', 'no', o 'no sé'.")
 
     def play(self) -> None:
-        """
-        Start and run the Akinator game in the terminal.
-
-        This method walks through the decision tree, asking questions
-        based on features until it reaches a leaf node and makes a guess.
-        It then displays the result and logs debug information.
-        """
         print("Piensa en un personaje y yo trataré de adivinarlo.")
 
         while True:
@@ -73,23 +32,27 @@ class AkinatorTerminalGUI:
             self.akinator.process_answer(response)
             self.akinator.log_debug_info(question, response)
 
-        character = self.akinator.make_guess()
+            if self.akinator.should_stop():
+                break
+
+        character, probability = self.akinator.make_guess()
 
         print("\n" + "=" * 60)
         print(f"¡He adivinado! Creo que estás pensando en: {character}")
+        print(f"Estoy {probability:.2%} seguro.")
         print("=" * 60 + "\n")
 
         print("Respuestas del usuario:")
         for feature, response in self.user_responses:
-            print(f"{feature}: {'Sí' if response else 'No'}")
+            response_str = (
+                "Sí" if response else "No" if response is not None else "No sé"
+            )
+            print(f"{feature}: {response_str}")
 
         print("\nDatos del personaje en el conjunto de datos:")
         character_data = self.akinator.get_character_data(character)
         print(character_data)
 
     def print_tree(self) -> None:
-        """
-        Print the decision tree rules.
-        """
-        print("Árbol de decisión:")
+        print("Información del modelo:")
         print(self.akinator.get_tree_info())
