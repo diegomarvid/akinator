@@ -105,7 +105,7 @@ class AkinatorBNCore:
     @lru_cache(maxsize=None)
     def update_probabilities(
         self, evidence: Tuple[Tuple[str, float], ...]
-    ) -> List[Tuple[str, float]]:
+    ) -> Tuple[Tuple[str, float], ...]:
         evidence_dict = dict(evidence)
         certain_evidence = {
             k: v for k, v in evidence_dict.items() if v != UNCERTAIN_EVIDENCE
@@ -139,30 +139,33 @@ class AkinatorBNCore:
         normalized_probs = [
             (char, prob / total_prob) for char, prob in character_probs.items()
         ]
-        return sorted(normalized_probs, key=lambda x: x[1], reverse=True)
+        return tuple(sorted(normalized_probs, key=lambda x: x[1], reverse=True))
 
     def select_best_feature(self, evidence: Dict[str, float]) -> Optional[str]:
         remaining_features = [f for f in self.features if f not in evidence]
         if not remaining_features:
             return None
+        evidence_tuple = tuple(sorted(evidence.items()))
         info_gains = [
-            (f, self.calculate_information_gain(f, evidence))
+            (f, self.calculate_information_gain(f, evidence_tuple))
             for f in remaining_features
         ]
         return max(info_gains, key=lambda x: x[1])[0]
 
+    @lru_cache(maxsize=None)
     def calculate_information_gain(
-        self, feature: str, evidence: Dict[str, float]
+        self, feature: str, evidence: Tuple[Tuple[str, float], ...]
     ) -> float:
-        current_probs = self.update_probabilities(tuple(sorted(evidence.items())))
+        evidence_dict = dict(evidence)
+        current_probs = self.update_probabilities(evidence)
         current_entropy = self._calculate_entropy(current_probs)
 
         entropy_yes = entropy_no = entropy_uncertain = 0
         prob_yes = prob_no = prob_uncertain = 0
 
         for answer in [NEGATIVE_EVIDENCE, POSITIVE_EVIDENCE, UNCERTAIN_EVIDENCE]:
-            new_evidence = {**evidence, feature: answer}
-            probs = self.update_probabilities(tuple(sorted(new_evidence.items())))
+            new_evidence = tuple(sorted({**evidence_dict, feature: answer}.items()))
+            probs = self.update_probabilities(new_evidence)
             entropy = self._calculate_entropy(probs)
             prob_sum = sum(p for _, p in probs)
 
@@ -188,7 +191,9 @@ class AkinatorBNCore:
         )
         return info_gain
 
-    def _calculate_entropy(self, probs: List[Tuple[str, float]]) -> float:
+    @staticmethod
+    @lru_cache(maxsize=1000)
+    def _calculate_entropy(probs: Tuple[Tuple[str, float], ...]) -> float:
         return -sum(p * np.log2(p) for _, p in probs if p > 0)
 
     def log_debug_info(self, feature_name: str, response: Optional[bool]) -> None:
