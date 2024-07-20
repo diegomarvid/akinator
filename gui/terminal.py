@@ -9,12 +9,12 @@ class AkinatorTerminalGUI:
 
     def _ask_question(self, feature_name: str) -> Optional[bool]:
         while True:
-            response = input(f"¿{feature_name}? (sí/no/no sé): ").strip().lower()
-            if response in ["sí", "si", "s", "yes", "y"]:
+            response = input(f"{feature_name} (si/no/no se): ").strip().lower()
+            if response in ["sí", "si", "s", "yes", "y", "1"]:
                 return True
-            elif response in ["no", "n"]:
+            elif response in ["no", "n", "0"]:
                 return False
-            elif response in ["no sé", "no se", "ns", "idk"]:
+            elif response in ["no sé", "no se", "ns", "idk", "0.5"]:
                 return None
             else:
                 print("Por favor, responde con 'sí', 'no', o 'no sé'.")
@@ -30,7 +30,15 @@ class AkinatorTerminalGUI:
             response = self._ask_question(question)
             self.user_responses.append((question, response))
             self.akinator.process_answer(response)
-            self.akinator.log_debug_info(question, response)
+
+            top_guesses = self.akinator.get_top_guesses(n=5)
+            formatted_guesses = "\n".join(
+                [
+                    f"{i+1}. {name}: {score:.2f}"
+                    for i, (name, score) in enumerate(top_guesses)
+                ]
+            )
+            self.akinator.logger.info(f"\nTop guesses:\n{formatted_guesses}\n")
 
             if self.akinator.should_stop():
                 break

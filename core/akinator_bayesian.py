@@ -27,15 +27,21 @@ class AkinatorBNCore:
         self.max_questions = 20
 
     def _setup_logger(self, debug: bool) -> logging.Logger:
-        logger = logging.getLogger(__name__)
+        logger = logging.getLogger(self.__class__.__name__)
         logger.setLevel(logging.DEBUG if debug else logging.INFO)
-        if not logger.handlers:
-            handler = logging.StreamHandler()
-            formatter = logging.Formatter(
-                "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-            )
-            handler.setFormatter(formatter)
-            logger.addHandler(handler)
+
+        # Clear existing handlers
+        if logger.hasHandlers():
+            logger.handlers.clear()
+
+        handler = logging.StreamHandler()
+        formatter = logging.Formatter("%(levelname)s - %(message)s")
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+
+        # Prevent the logger from propagating messages to the root logger
+        logger.propagate = False
+
         return logger
 
     def _get_valid_features(self) -> List[str]:
@@ -200,11 +206,13 @@ class AkinatorBNCore:
         response_str = (
             "Yes" if response else "No" if response is not None else "Unknown"
         )
-        self.logger.debug(f"Feature: {feature_name}, Response: {response_str}")
         self.logger.debug(f"Current evidence: {self.evidence}")
 
     def get_character_data(self, character: str) -> pd.Series:
-        return self.data[self.data["Personaje"] == character].iloc[0]
+        character_data = self.data[self.data["Personaje"] == character]
+        if character_data.empty:
+            raise KeyError(f"Character '{character}' not found in the dataset")
+        return character_data.iloc[0]
 
     def get_tree_info(self) -> str:
         return "Bayesian Network does not have a tree representation."
