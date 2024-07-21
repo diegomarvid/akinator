@@ -1,15 +1,15 @@
-import sys
 import os
+import sys
+from typing import Any, Dict, List, Optional, Tuple
+
+import streamlit as st
+import pandas as pd
 
 # Add the project root directory to the Python path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, project_root)
 
-import streamlit as st
-from typing import List, Tuple, Dict, Any, Optional
-from core.akinator_bayesian import AkinatorBNCore
-
-CSV_FILE = "data/personajes.csv"  # Replace with the path to your CSV file
+from core import AkinatorBNCore, Answer
 
 
 @st.cache(allow_output_mutation=True)
@@ -17,16 +17,16 @@ def get_akinator_core() -> AkinatorBNCore:
     """
     Create and cache an instance of AkinatorBNCore.
     """
-    return AkinatorBNCore(CSV_FILE, debug=True)
+    return AkinatorBNCore(csv_file="data/personajes_expanded.csv", debug=True)
 
 
-def display_user_data(user_responses: List[Tuple[str, Optional[bool]]]) -> None:
+def display_user_data(user_responses: List[Tuple[str, Optional[Answer]]]) -> None:
     """
     Display the user's responses in the sidebar.
     """
     st.sidebar.write("Respuestas del usuario:")
     for feature, response in user_responses:
-        response_str = "Sí" if response else "No" if response is not None else "No sé"
+        response_str = response.name if response else "No sé"
         st.sidebar.write(f"{feature}: {response_str}")
 
 
@@ -68,7 +68,7 @@ def main() -> None:
         question = akinator_core.get_next_question()
         if question:
             response = st.radio(
-                f"¿{question}?",
+                question,
                 ("Sí", "No", "No sé"),
                 key=f"question_{len(st.session_state.game_state['user_responses'])}",
             )
@@ -77,11 +77,12 @@ def main() -> None:
                 key=f"next_{len(st.session_state.game_state['user_responses'])}",
             ):
                 answer = (
-                    True if response == "Sí" else False if response == "No" else None
+                    Answer.YES
+                    if response == "Sí"
+                    else Answer.NO if response == "No" else Answer.UNCERTAIN
                 )
                 st.session_state.game_state["user_responses"].append((question, answer))
                 akinator_core.process_answer(answer)
-                akinator_core.log_debug_info(question, answer)
 
                 if akinator_core.should_stop():
                     st.session_state.game_state["game_over"] = True
@@ -97,8 +98,6 @@ def main() -> None:
         st.success(f"¡He adivinado! Aquí están mis mejores suposiciones:")
 
         # Create a dataframe for the top guesses
-        import pandas as pd
-
         df = pd.DataFrame(top_guesses, columns=["Personaje", "Probabilidad"])
         df["Probabilidad"] = df["Probabilidad"].apply(lambda x: f"{x:.2%}")
 

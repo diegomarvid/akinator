@@ -1,5 +1,5 @@
-from typing import List, Tuple, Optional
-from core.akinator_bayesian import AkinatorBNCore
+from typing import List, Optional, Tuple
+from core.akinator_bayesian import AkinatorBNCore, Answer
 
 
 class AkinatorTerminalGUI:
@@ -7,7 +7,7 @@ class AkinatorTerminalGUI:
 
     def __init__(self, csv_file: str, debug: bool = False):
         self.akinator = AkinatorBNCore(csv_file, debug)
-        self.user_responses: List[Tuple[str, Optional[bool]]] = []
+        self.user_responses: List[Tuple[str, Optional[Answer]]] = []
 
     def play(self) -> None:
         print("Piensa en un personaje y yo trataré de adivinarlo.")
@@ -25,18 +25,18 @@ class AkinatorTerminalGUI:
             self.akinator.process_answer(response)
             self._display_top_guesses()
 
-    def _ask_question(self, feature_name: str) -> Optional[bool]:
+    def _ask_question(self, feature_name: str) -> Optional[Answer]:
         response_map = {
-            True: ["sí", "si", "s", "yes", "y", "1"],
-            False: ["no", "n", "0"],
-            None: ["no sé", "no se", "ns", "idk", "0.5"],
+            Answer.YES: ["sí", "si", "s", "yes", "y", "1"],
+            Answer.NO: ["no", "n", "0"],
+            Answer.UNCERTAIN: ["no sé", "no se", "ns", "idk", "0.5"],
         }
 
         while True:
             response = input(f"{feature_name} (si/no/no se): ").strip().lower()
-            for value, options in response_map.items():
+            for answer, options in response_map.items():
                 if response in options:
-                    return value
+                    return answer
             print("Por favor, responde con 'sí', 'no', o 'no sé'.")
 
     def _display_top_guesses(self, n: int = 5) -> None:
@@ -107,9 +107,7 @@ class AkinatorTerminalGUI:
     def _display_user_responses(self) -> None:
         print("Respuestas del usuario:")
         for feature, response in self.user_responses:
-            response_str = (
-                "Sí" if response else "No" if response is not None else "No sé"
-            )
+            response_str = response.name if response else "Unknown"
             print(f"{feature}: {response_str}")
 
     def _display_character_data(self, character: str) -> None:

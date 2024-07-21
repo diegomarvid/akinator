@@ -1,2 +1,2 @@
 from .akinator import AkinatorCore
-from .akinator_bayesian import AkinatorBNCore
+from .akinator_bayesian import AkinatorBNCore, Answer
