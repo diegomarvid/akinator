@@ -1,15 +1,28 @@
-import pandas as pd
+import logging
+from enum import Enum
+from functools import lru_cache
+from typing import Dict, List, Optional, Tuple
+
 import numpy as np
-from pgmpy.models import BayesianNetwork
+import pandas as pd
 from pgmpy.estimators import MaximumLikelihoodEstimator
 from pgmpy.inference import VariableElimination
-import logging
-from typing import List, Dict, Tuple, Optional
-from functools import lru_cache
+from pgmpy.models import BayesianNetwork
 
-NEGATIVE_EVIDENCE = 0
-POSITIVE_EVIDENCE = 1
-UNCERTAIN_EVIDENCE = 0.5
+
+class Answer(Enum):
+    NO = 0.0
+    YES = 1.0
+    UNCERTAIN = 0.5
+
+    @classmethod
+    def from_value(cls, value: float) -> "Answer":
+        for answer in cls:
+            if (
+                abs(answer.value - value) < 1e-6
+            ):  # Use a small epsilon for float comparison
+                return answer
+        raise ValueError(f"No matching Answer for value: {value}")
 
 
 class AkinatorBNCore:
@@ -19,7 +32,7 @@ class AkinatorBNCore:
         self.inference = None
         self.characters = list(self.data["Personaje"])
         self.features = self._get_valid_features()
-        self.evidence = {}
+        self.evidence: Dict[str, Answer] = {}
         self.current_feature = None
         self.logger = self._setup_logger(debug)
         self._prepare_model()
@@ -65,15 +78,16 @@ class AkinatorBNCore:
             return f"¿El personaje {self.current_feature.lower()}?"
         return None
 
-    def process_answer(self, answer: Optional[bool]) -> None:
+    def process_answer(self, answer: Optional[Answer]) -> None:
         if self.current_feature:
             if answer is None:
-                self.evidence[self.current_feature] = UNCERTAIN_EVIDENCE
+                self.evidence[self.current_feature] = Answer.UNCERTAIN
             else:
-                self.evidence[self.current_feature] = (
-                    POSITIVE_EVIDENCE if answer else NEGATIVE_EVIDENCE
-                )
+                self.evidence[self.current_feature] = answer
             self.log_debug_info(self.current_feature, answer)
+
+    def _evidence_to_float(self, evidence: Dict[str, Answer]) -> Dict[str, float]:
+        return {k: v.value for k, v in evidence.items()}
 
     def make_guess(self) -> Tuple[str, float]:
         probs = self.update_probabilities(tuple(sorted(self.evidence.items())))
@@ -110,14 +124,15 @@ class AkinatorBNCore:
 
     @lru_cache(maxsize=None)
     def update_probabilities(
-        self, evidence: Tuple[Tuple[str, float], ...]
+        self, evidence: Tuple[Tuple[str, Answer], ...]
     ) -> Tuple[Tuple[str, float], ...]:
         evidence_dict = dict(evidence)
+        float_evidence = self._evidence_to_float(evidence_dict)
         certain_evidence = {
-            k: v for k, v in evidence_dict.items() if v != UNCERTAIN_EVIDENCE
+            k: v for k, v in float_evidence.items() if v != Answer.UNCERTAIN.value
         }
         uncertain_features = [
-            k for k, v in evidence_dict.items() if v == UNCERTAIN_EVIDENCE
+            k for k, v in float_evidence.items() if v == Answer.UNCERTAIN.value
         ]
 
         query = self.inference.query(variables=["Personaje"], evidence=certain_evidence)
@@ -160,7 +175,7 @@ class AkinatorBNCore:
 
     @lru_cache(maxsize=None)
     def calculate_information_gain(
-        self, feature: str, evidence: Tuple[Tuple[str, float], ...]
+        self, feature: str, evidence: Tuple[Tuple[str, Answer], ...]
     ) -> float:
         evidence_dict = dict(evidence)
         current_probs = self.update_probabilities(evidence)
@@ -169,15 +184,15 @@ class AkinatorBNCore:
         entropy_yes = entropy_no = entropy_uncertain = 0
         prob_yes = prob_no = prob_uncertain = 0
 
-        for answer in [NEGATIVE_EVIDENCE, POSITIVE_EVIDENCE, UNCERTAIN_EVIDENCE]:
+        for answer in Answer:
             new_evidence = tuple(sorted({**evidence_dict, feature: answer}.items()))
             probs = self.update_probabilities(new_evidence)
             entropy = self._calculate_entropy(probs)
             prob_sum = sum(p for _, p in probs)
 
-            if answer == NEGATIVE_EVIDENCE:
+            if answer == Answer.NO:
                 entropy_no, prob_no = entropy, prob_sum
-            elif answer == POSITIVE_EVIDENCE:
+            elif answer == Answer.YES:
                 entropy_yes, prob_yes = entropy, prob_sum
             else:
                 entropy_uncertain, prob_uncertain = entropy, prob_sum
@@ -195,6 +210,7 @@ class AkinatorBNCore:
             + prob_no * entropy_no
             + prob_uncertain * entropy_uncertain
         )
+
         return info_gain
 
     @staticmethod
@@ -202,10 +218,9 @@ class AkinatorBNCore:
     def _calculate_entropy(probs: Tuple[Tuple[str, float], ...]) -> float:
         return -sum(p * np.log2(p) for _, p in probs if p > 0)
 
-    def log_debug_info(self, feature_name: str, response: Optional[bool]) -> None:
-        response_str = (
-            "Yes" if response else "No" if response is not None else "Unknown"
-        )
+    def log_debug_info(self, feature_name: str, response: Optional[Answer]) -> None:
+        response_str = "Unknown" if response is None else response.name
+        self.logger.debug(f"Question: {feature_name}, Answer: {response_str}")
         self.logger.debug(f"Current evidence: {self.evidence}")
 
     def get_character_data(self, character: str) -> pd.Series:

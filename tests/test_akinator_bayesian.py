@@ -1,6 +1,8 @@
-import pytest
-from core import AkinatorBNCore
 import numpy as np
+import pytest
+
+from core import AkinatorBNCore
+from core.akinator_bayesian import Answer
 
 
 @pytest.fixture
@@ -26,27 +28,27 @@ def test_get_next_question(akinator):
 
 def test_process_answer(akinator):
     akinator.get_next_question()
-    akinator.process_answer(True)
+    akinator.process_answer(Answer.YES)
     assert len(akinator.evidence) == 1
-    assert list(akinator.evidence.values())[0] == 1
+    assert list(akinator.evidence.values())[0] == Answer.YES
 
     akinator.get_next_question()
-    akinator.process_answer(False)
+    akinator.process_answer(Answer.NO)
     assert len(akinator.evidence) == 2
-    assert list(akinator.evidence.values())[1] == 0
+    assert list(akinator.evidence.values())[1] == Answer.NO
 
     akinator.get_next_question()
-    akinator.process_answer(None)
+    akinator.process_answer(Answer.UNCERTAIN)
     assert len(akinator.evidence) == 3
-    assert list(akinator.evidence.values())[2] == 0.5
+    assert list(akinator.evidence.values())[2] == Answer.UNCERTAIN
 
 
 def test_make_guess(akinator):
     akinator.evidence = {
-        "Es humano": 1,
-        "Es ficticio": 1,
-        "Tiene poderes mágicos": 1,
-        "Es un hombre": 1,
+        "Es humano": Answer.YES,
+        "Es ficticio": Answer.YES,
+        "Tiene poderes mágicos": Answer.YES,
+        "Es un hombre": Answer.YES,
     }
     guess, probability = akinator.make_guess()
     assert guess == "Harry Potter"
@@ -54,7 +56,11 @@ def test_make_guess(akinator):
 
 
 def test_get_top_guesses(akinator):
-    akinator.evidence = {"Es humano": 1, "Es ficticio": 1, "Es un hombre": 1}
+    akinator.evidence = {
+        "Es humano": Answer.YES,
+        "Es ficticio": Answer.YES,
+        "Es un hombre": Answer.YES,
+    }
     top_guesses = akinator.get_top_guesses(3)
     assert len(top_guesses) == 3
     assert all(isinstance(char, str) and 0 <= prob <= 1 for char, prob in top_guesses)
@@ -63,19 +69,19 @@ def test_get_top_guesses(akinator):
 
 def test_should_stop(akinator):
     akinator.evidence = {
-        "Es humano": 1,
-        "Es ficticio": 1,
-        "Tiene poderes mágicos": 1,
-        "Es un hombre": 1,
+        "Es humano": Answer.YES,
+        "Es ficticio": Answer.YES,
+        "Tiene poderes mágicos": Answer.YES,
+        "Es un hombre": Answer.YES,
     }
     assert akinator.should_stop()
 
-    akinator.evidence = {"Es humano": 1}
+    akinator.evidence = {"Es humano": Answer.YES}
     assert not akinator.should_stop()
 
 
 def test_reset_game(akinator):
-    akinator.evidence = {"Es humano": 1}
+    akinator.evidence = {"Es humano": Answer.YES}
     akinator.current_feature = "Es humano"
     akinator.reset_game()
     assert akinator.evidence == {}
@@ -87,7 +93,7 @@ def test_select_best_feature(akinator):
     assert best_feature in akinator.features
 
     # Test with some evidence
-    akinator.evidence = {"Es humano": 1}
+    akinator.evidence = {"Es humano": Answer.YES}
     best_feature = akinator.select_best_feature(akinator.evidence)
     assert best_feature in akinator.features
     assert best_feature != "Es humano"
@@ -95,16 +101,16 @@ def test_select_best_feature(akinator):
 
 def test_get_character_data(akinator):
     character_data = akinator.get_character_data("Harry Potter")
-    assert character_data["Es humano"] == 1
-    assert character_data["Es ficticio"] == 1
-    assert character_data["Tiene poderes mágicos"] == 1
-    assert character_data["Es un hombre"] == 1
+    assert character_data["Es humano"] == Answer.YES.value
+    assert character_data["Es ficticio"] == Answer.YES.value
+    assert character_data["Tiene poderes mágicos"] == Answer.YES.value
+    assert character_data["Es un hombre"] == Answer.YES.value
 
     character_data = akinator.get_character_data("Pikachu")
-    assert character_data["Es humano"] == 0
-    assert character_data["Es ficticio"] == 1
-    assert character_data["Tiene poderes mágicos"] == 1
-    assert character_data["Es un hombre"] == 0
+    assert character_data["Es humano"] == Answer.NO.value
+    assert character_data["Es ficticio"] == Answer.YES.value
+    assert character_data["Tiene poderes mágicos"] == Answer.YES.value
+    assert character_data["Es un hombre"] == Answer.NO.value
 
 
 def test_max_questions_limit(akinator):
@@ -112,13 +118,13 @@ def test_max_questions_limit(akinator):
     for _ in range(akinator.max_questions):
         question = akinator.get_next_question()
         assert question is not None
-        akinator.process_answer(True)
+        akinator.process_answer(Answer.YES)
 
     assert akinator.get_next_question() is None
 
 
 def test_update_probabilities(akinator):
-    evidence = (("Es humano", 1), ("Es ficticio", 1))
+    evidence = (("Es humano", Answer.YES), ("Es ficticio", Answer.YES))
     probs = akinator.update_probabilities(evidence)
     assert len(probs) == 5  # All characters
     assert sum(prob for _, prob in probs) == pytest.approx(1.0)
@@ -126,7 +132,7 @@ def test_update_probabilities(akinator):
 
 
 def test_calculate_information_gain(akinator):
-    evidence = (("Es humano", 1),)
+    evidence = (("Es humano", Answer.YES),)
     info_gain = akinator.calculate_information_gain("Es ficticio", evidence)
     assert 0 <= info_gain <= 1
 
@@ -136,21 +142,21 @@ def test_confidence_threshold(akinator):
 
     # Test with partial evidence (should not stop)
     akinator.evidence = {
-        "Es humano": 1,
+        "Es humano": Answer.YES,
     }
     assert not akinator.should_stop()
 
     # Test with more evidence (should stop for Harry Potter)
     akinator.evidence = {
-        "Es humano": 1,
-        "Tiene poderes mágicos": 1,
+        "Es humano": Answer.YES,
+        "Tiene poderes mágicos": Answer.YES,
     }
     assert akinator.should_stop()
 
     # Test with conflicting evidence (should not stop)
     akinator.evidence = {
-        "Es humano": 1,
-        "Tiene poderes mágicos": 0,
+        "Es humano": Answer.YES,
+        "Tiene poderes mágicos": Answer.NO,
     }
     assert not akinator.should_stop()
 
@@ -164,8 +170,8 @@ def test_invalid_character(akinator):
 
 def test_make_guess_confidence(akinator):
     akinator.evidence = {
-        "Es humano": 1,
-        "Tiene poderes mágicos": 1,
+        "Es humano": Answer.YES,
+        "Tiene poderes mágicos": Answer.YES,
     }
     guess, probability = akinator.make_guess()
     assert guess == "Harry Potter"
@@ -174,10 +180,10 @@ def test_make_guess_confidence(akinator):
 
 def test_all_evidence_uncertain(akinator):
     akinator.evidence = {
-        "Es humano": 0.5,
-        "Es ficticio": 0.5,
-        "Tiene poderes mágicos": 0.5,
-        "Es un hombre": 0.5,
+        "Es humano": Answer.UNCERTAIN,
+        "Es ficticio": Answer.UNCERTAIN,
+        "Tiene poderes mágicos": Answer.UNCERTAIN,
+        "Es un hombre": Answer.UNCERTAIN,
     }
 
     # Get top guesses for all characters
