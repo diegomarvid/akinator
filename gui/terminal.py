@@ -4,6 +4,8 @@ from core.akinator_bayesian import AkinatorBNCore, Answer
 
 class AkinatorTerminalGUI:
     MAX_MULTIPLE_GUESSES = 5
+    MAX_ADDITIONAL_QUESTIONS = 5
+    CONFIDENCE_THRESHOLD = 0.5
 
     def __init__(self, csv_file: str, debug: bool = False):
         self.akinator = AkinatorBNCore(csv_file, debug)
@@ -52,21 +54,96 @@ class AkinatorTerminalGUI:
         )
         print("\n" + "=" * 60)
 
-        character, probability = (
-            self._handle_multiple_top_guesses(top_guesses)
-            if self._has_multiple_top_guesses(top_guesses)
-            else top_guesses[0]
-        )
+        if not top_guesses:
+            print(
+                "Lo siento, no tengo suficiente información para hacer una suposición."
+            )
+            self._handle_no_guess()
+            return
 
-        print(f"¡He adivinado! Creo que estás pensando en: {character}")
-        print(f"Estoy {probability:.2%} seguro.")
+        character, probability = top_guesses[0]
+
+        if probability >= self.CONFIDENCE_THRESHOLD:
+            print(f"¡Creo que he adivinado! ¿Estás pensando en: {character}?")
+            print(f"Estoy {probability:.2%} seguro.")
+        else:
+            print("No estoy muy seguro, pero estas son mis mejores suposiciones:")
+            for i, (char, prob) in enumerate(top_guesses, 1):
+                print(f"{i}. {char} (Probabilidad: {prob:.2%})")
+            print(f"{len(top_guesses) + 1}. Ninguno de los anteriores")
+
+        if self._verify_guess(top_guesses):
+            print("¡Excelente! He adivinado correctamente.")
+            self._display_character_data(character)
+        else:
+            print("Lo siento, parece que me equivoqué.")
+            self._handle_incorrect_guess()
+
         print("=" * 60 + "\n")
-
         self._display_user_responses()
-        self._display_character_data(character)
 
-    def _has_multiple_top_guesses(self, top_guesses: List[Tuple[str, float]]) -> bool:
-        return len(top_guesses) > 1 and top_guesses[0][1] == top_guesses[1][1]
+    def _verify_guess(self, top_guesses: List[Tuple[str, float]]) -> bool:
+        while True:
+            if len(top_guesses) == 1:
+                response = (
+                    input(
+                        f"¿Es correcto que el personaje es {top_guesses[0][0]}? (si/no): "
+                    )
+                    .strip()
+                    .lower()
+                )
+                if response in ["si", "sí", "s", "yes", "y"]:
+                    return True
+                elif response in ["no", "n"]:
+                    return False
+            else:
+                try:
+                    choice = int(
+                        input(
+                            "\n¿Cuál de estos personajes estabas pensando? Ingresa el número: "
+                        )
+                    )
+                    if 1 <= choice <= len(top_guesses):
+                        return True
+                    elif choice == len(top_guesses) + 1:
+                        return False
+                    print("Por favor, ingresa un número válido.")
+                except ValueError:
+                    print("Por favor, ingresa un número válido.")
+
+    def _handle_incorrect_guess(self) -> None:
+        additional_questions = 0
+        while additional_questions < self.MAX_ADDITIONAL_QUESTIONS:
+            question = self.akinator.get_next_question()
+            if question is None:
+                break
+
+            print(
+                f"\nPermíteme hacer una pregunta adicional ({additional_questions + 1}/{self.MAX_ADDITIONAL_QUESTIONS}):"
+            )
+            response = self._ask_question(question)
+            self.user_responses.append((question, response))
+            self.akinator.process_answer(response)
+
+            top_guesses = self._get_significant_top_guesses(max_guesses=1)
+            if top_guesses and self._verify_guess(top_guesses):
+                print(f"¡Ahora lo tengo! El personaje es {top_guesses[0][0]}.")
+                self._display_character_data(top_guesses[0][0])
+                return
+
+            additional_questions += 1
+
+        self._handle_no_guess()
+
+    def _handle_no_guess(self) -> None:
+        print(
+            "\nNo he podido adivinar el personaje. ¿Podrías decirme en quién estabas pensando?"
+        )
+        correct_character = input("Nombre del personaje: ").strip()
+        print(
+            f"Gracias por la información sobre {correct_character}. Lo tendré en cuenta para mejorar en el futuro."
+        )
+        # Here you would add logic to learn this new character or update the database
 
     def _get_significant_top_guesses(
         self, relative_threshold: float = 0.9, max_guesses: int = 10
@@ -81,28 +158,6 @@ class AkinatorTerminalGUI:
         significant_guesses = [guess for guess in all_guesses if guess[1] >= threshold]
 
         return significant_guesses[:max_guesses]
-
-    def _handle_multiple_top_guesses(
-        self, top_guesses: List[Tuple[str, float]]
-    ) -> Tuple[str, float]:
-        print(
-            "No puedo estar completamente seguro, pero creo que estás pensando en uno de estos personajes:"
-        )
-        for i, (character, probability) in enumerate(top_guesses, 1):
-            print(f"{i}. {character} (Probabilidad: {probability:.2%})")
-
-        while True:
-            try:
-                choice = int(
-                    input(
-                        "\n¿Cuál de estos personajes estabas pensando? Ingresa el número: "
-                    )
-                )
-                if 1 <= choice <= len(top_guesses):
-                    return top_guesses[choice - 1]
-                print("Por favor, ingresa un número válido.")
-            except ValueError:
-                print("Por favor, ingresa un número válido.")
 
     def _display_user_responses(self) -> None:
         print("Respuestas del usuario:")
