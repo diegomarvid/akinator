@@ -5,7 +5,7 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-from pgmpy.estimators import MaximumLikelihoodEstimator
+from pgmpy.estimators import MaximumLikelihoodEstimator, BayesianEstimator
 from pgmpy.inference import VariableElimination
 from pgmpy.models import BayesianNetwork
 
@@ -36,7 +36,7 @@ class AkinatorBNCore:
         self.current_feature = None
         self.logger = self._setup_logger(debug)
         self._prepare_model()
-        self.confidence_threshold = 0.8
+        self.confidence_threshold = 0.4
         self.max_questions = 20
 
     def _setup_logger(self, debug: bool) -> logging.Logger:
@@ -66,7 +66,8 @@ class AkinatorBNCore:
 
         edges = [("Personaje", feature) for feature in self.features]
         self.model = BayesianNetwork(edges)
-        self.model.fit(filtered_data, estimator=MaximumLikelihoodEstimator)
+        self.model.fit(filtered_data, estimator=BayesianEstimator, prior_type="BDeu")
+
         self.inference = VariableElimination(self.model)
         self.logger.info("Bayesian Network model built successfully")
 
