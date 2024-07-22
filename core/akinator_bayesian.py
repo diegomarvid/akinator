@@ -64,6 +64,23 @@ class AkinatorBNCore:
         valid_columns = ["Personaje"] + self.features
         filtered_data = self.data[valid_columns]
 
+        # Ensure all possible values (0, 0.5, 1) are represented for each feature
+        for feature in self.features:
+            unique_values = filtered_data[feature].unique()
+            for value in [0.0, 0.5, 1.0]:
+                if value not in unique_values:
+                    # Add a dummy row with the missing value
+                    dummy_row = pd.DataFrame(
+                        {
+                            "Personaje": ["DummyCharacter"],
+                            feature: [value],
+                            **{f: [0.5] for f in self.features if f != feature},
+                        }
+                    )
+                    filtered_data = pd.concat(
+                        [filtered_data, dummy_row], ignore_index=True
+                    )
+
         edges = [("Personaje", feature) for feature in self.features]
         self.model = BayesianNetwork(edges)
         self.model.fit(filtered_data, estimator=BayesianEstimator, prior_type="BDeu")
